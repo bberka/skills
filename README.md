@@ -5,6 +5,7 @@ My agent skills for Claude Code, Codex, Cursor, and other agents that read `SKIL
 | Skill | What it does | Trigger |
 | --- | --- | --- |
 | [`challenge-feature`](skills/challenge-feature/SKILL.md) | Argues against a feature idea before any code is written. Checks whether existing features already cover the need, what the change would cost to build and maintain, and how much harder the app gets to learn. Ends with a build / build smaller / don't build verdict. | Manual only |
+| [`challenge-feature-panel`](skills/challenge-feature-panel/SKILL.md) | The same question, asked of a panel of subagents: engineer, UX designer, everyday user, product owner, and advocate. Each reviews the idea separately, and the main agent weighs their reports into one verdict. | Manual only |
 
 The unslop skills live in their own repo: [bberka/unslop-skills](https://github.com/bberka/unslop-skills).
 
@@ -58,6 +59,30 @@ It starts from "don't build it", and the feature has to make its case:
 4. Lists the cost to users: new UI, new concepts to learn, and features that start to overlap.
 5. Considers cheaper options: do nothing, extend an existing feature, build a smaller version.
 6. Gives a verdict and stops. It writes no code until you ask.
+
+### challenge-feature-panel
+
+For bigger decisions, where one reviewer might miss an angle:
+
+```
+/challenge-feature-panel add snooze to bookmarks
+```
+
+1. Frames the problem and briefs the panel with facts and file pointers only, so its own opinion doesn't shape theirs.
+2. Spawns one read-only subagent per role, in parallel. The roles are in [roles.md](skills/challenge-feature-panel/roles.md):
+   - **engineer:** build cost, edge cases, upkeep
+   - **ux:** where the feature lives, clutter, overlap with existing features
+   - **user:** a non-technical user: would they find it, use it, or get confused?
+   - **product:** whether it fits the app's purpose, scope creep, cheaper options
+   - **advocate:** the strongest honest case for building it. Its vote isn't counted.
+3. Weighs evidence rather than counting votes, and checks the code itself when panelists disagree on a fact.
+4. Gives one verdict with a vote table, the settled disputes, and a recommendation, then stops.
+
+To pick other roles, name them: `/challenge-feature-panel add snooze roles: engineer,user,accessibility`. If a role isn't in roles.md, the main agent writes a brief for it.
+
+It spawns five agents, so use `challenge-feature` for quick checks. Agents without subagent support play the roles one at a time in a single context.
+
+### Manual only
 
 In Claude Code, `disable-model-invocation: true` keeps the agent from running it on its own, so it never runs on ordinary tasks. Agents that ignore that field may pick it up when you ask whether to build something. To keep it manual there too, name it explicitly.
 
