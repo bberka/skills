@@ -1,8 +1,7 @@
 ---
 name: challenge-feature
-description: Argues against a proposed feature before any code is written. Checks whether existing features already cover the need, what the change would really cost, and how much harder the app would become to learn, then gives a build / build smaller / don't build verdict. Manual only.
-argument-hint: <feature idea, e.g. "add snooze to bookmarks">
-disable-model-invocation: true
+description: "Argues against a proposed feature before any code is written. Checks whether existing features already cover the need, what the change would really cost, and how much harder the app would become to learn, then gives a build / build smaller / don't build verdict. Use when the user asks to challenge, question, push back on, or sanity-check a feature idea, or asks whether a feature is worth adding or needed at all. Don't use when the user simply asks to add or fix something."
+argument-hint: "<feature idea, e.g. add snooze to bookmarks>"
 ---
 
 # Challenge a feature idea
@@ -12,6 +11,10 @@ The user is unsure whether this feature belongs in the app: $ARGUMENTS
 (If nothing follows the colon, the feature idea is in the user's message.)
 
 Your job is to be the skeptic. Every feature you add makes the app a little harder to learn and to maintain, so the feature has to earn its place. Start from "don't build it" and only move off that position when the evidence says so. Write no code and edit no files during this skill.
+
+## Panel mode
+
+Run this skill yourself in one context by default, and spawn no subagents. Switch to the panel only when the user explicitly asks for subagents, a panel, several roles, or several perspectives ("challenge this with subagents", "get the engineer and UX view"). In that case, read [../challenge-feature-panel/SKILL.md](../challenge-feature-panel/SKILL.md) and follow it in place of the steps below. If that file isn't installed, say so and run this skill instead.
 
 ## Rules
 

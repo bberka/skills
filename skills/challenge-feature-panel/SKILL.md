@@ -1,6 +1,6 @@
 ---
 name: challenge-feature-panel
-description: "Puts a feature idea in front of a panel of subagents (engineer, UX designer, everyday user, product owner, advocate) that each review it independently, then weighs their reports into one build / build smaller / don't build verdict. Spawns five subagents, so it costs more than challenge-feature. Manual only."
+description: "Puts a feature idea in front of a panel of subagents (engineer, UX designer, everyday user, product owner, advocate) that each review it independently, then weighs their reports into one build / build smaller / don't build verdict. Spawns five subagents, so it costs more than challenge-feature. Run it by name, or challenge-feature loads it when the user explicitly asks for subagents or a panel."
 argument-hint: "<feature idea> [roles: engineer,ux,user,product,advocate,...]"
 disable-model-invocation: true
 ---

@@ -4,8 +4,8 @@ My agent skills for Claude Code, Codex, Cursor, and other agents that read `SKIL
 
 | Skill | What it does | Trigger |
 | --- | --- | --- |
-| [`challenge-feature`](skills/challenge-feature/SKILL.md) | Argues against a feature idea before any code is written. Checks whether existing features already cover the need, what the change would cost to build and maintain, and how much harder the app gets to learn. Ends with a build / build smaller / don't build verdict. | Manual only |
-| [`challenge-feature-panel`](skills/challenge-feature-panel/SKILL.md) | The same question, asked of a panel of subagents: engineer, UX designer, everyday user, product owner, and advocate. Each reviews the idea separately, and the main agent weighs their reports into one verdict. | Manual only |
+| [`challenge-feature`](skills/challenge-feature/SKILL.md) | Argues against a feature idea before any code is written. Checks whether existing features already cover the need, what the change would cost to build and maintain, and how much harder the app gets to learn. Ends with a build / build smaller / don't build verdict. | Asking to challenge an idea, or `/challenge-feature` |
+| [`challenge-feature-panel`](skills/challenge-feature-panel/SKILL.md) | The same question, asked of a panel of subagents: engineer, UX designer, everyday user, product owner, and advocate. Each reviews the idea separately, and the main agent weighs their reports into one verdict. | Asking to challenge an idea, or `/challenge-feature` |
 
 The unslop skills live in their own repo: [bberka/unslop-skills](https://github.com/bberka/unslop-skills).
 
@@ -45,11 +45,15 @@ To update, run `npx skills update`, or `git pull` and copy again.
 
 ### challenge-feature
 
-Run it when you have an idea but aren't sure it belongs in the app:
+Run it when you have an idea but aren't sure it belongs in the app. Ask in plain words or name it:
 
 ```
+challenge the snooze idea before we build it
+is a snooze feature even worth adding?
 /challenge-feature add snooze to bookmarks
 ```
+
+It only starts when you ask for a challenge. A plain "add snooze" goes straight to the work.
 
 It starts from "don't build it", and the feature has to make its case:
 
@@ -82,9 +86,14 @@ To pick other roles, name them: `/challenge-feature-panel add snooze roles: engi
 
 It spawns five agents, so use `challenge-feature` for quick checks. Agents without subagent support play the roles one at a time in a single context.
 
-### Manual only
+### When the panel runs
 
-In Claude Code, `disable-model-invocation: true` keeps the agent from running it on its own, so it never runs on ordinary tasks. Agents that ignore that field may pick it up when you ask whether to build something. To keep it manual there too, name it explicitly.
+The panel never starts on its own. In Claude Code, `disable-model-invocation: true` keeps the agent from picking it. It runs in two cases:
+
+- You name it: `/challenge-feature-panel ...`
+- You ask `challenge-feature` for subagents, a panel, or several perspectives ("challenge the snooze idea with subagents"). `challenge-feature` then reads the panel's `SKILL.md` from the sibling folder, so install both together.
+
+Agents that ignore `disable-model-invocation` may pick the panel on their own. Name the skill you want to be sure.
 
 ## Adding a skill
 
