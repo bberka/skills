@@ -121,7 +121,7 @@ Done when the branch holds the approved changes, local checks pass, and every re
 Real numbers need real runs, which needs a push and usually a pull request. Pushing and opening a pull request are the user's call: do it when they asked for it or agree now.
 
 1. Push and let CI finish. If a check fails, fix it before measuring; a red run measures nothing.
-2. Run it at least twice more (re-run the workflow or push an empty commit). The first run after a cache change is cold and slower than every run after it. Three warm runs are a fair sample.
+2. Run it at least twice more by pushing empty commits (`git commit --allow-empty`). A re-run of the same commit replaces its earlier attempt in the history, so it adds no sample. The first run after a cache change is cold and slower than every run after it. Three warm runs are a fair sample.
 3. Measure and compare:
 
    ```bash
@@ -129,7 +129,7 @@ Real numbers need real runs, which needs a push and usually a pull request. Push
    python3 scripts/ci_timing.py compare <scratch>/before.json <scratch>/after.json
    ```
 
-4. Check the comparison is fair. Both sides must run the same jobs: a baseline of pull requests that skipped half the jobs through path filters is not comparable, so narrow it with `--workflow`, `--branch`, or `--sha` to commits that ran what your branch ran, and re-measure the baseline that way. Say which runs are cold.
+4. Check the comparison is fair. Judge each lever by the step it touched (the step times are in both `measure` outputs), since the whole wait also moves with runner load and queue time. On self-hosted or shared runners that noise can be larger than the gain: say so, and report the step times. Both sides must run the same jobs: a baseline of pull requests that skipped half the jobs through path filters is not comparable, so narrow it with `--workflow`, `--branch`, or `--sha` (repeatable) to commits that ran what your branch ran, and re-measure the baseline that way. Say which runs are cold.
 5. Revert each lever that shows no gain, or that made its job slower. Caches are the usual case: on a fast network, restoring a large cache can take longer than the download it replaces.
 
 Done when the comparison is from at least two warm runs with every gate check green, and each kept lever shows its gain in the job it touched.

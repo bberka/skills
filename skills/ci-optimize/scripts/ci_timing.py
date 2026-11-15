@@ -98,8 +98,8 @@ def github_runs(repo, host, args):
         query["event"] = args.event
     if args.branch:
         query["branch"] = args.branch
-    if args.sha:
-        query["head_sha"] = args.sha
+    if len(args.sha) == 1:
+        query["head_sha"] = args.sha[0]
     data, err = gh(f"repos/{repo}/actions/runs?{urllib.parse.urlencode(query)}", host)
     if data is None:
         die(f"could not list runs: {err}")
@@ -112,6 +112,8 @@ def github_runs(repo, host, args):
         if run["head_branch"] in args.exclude_branch:
             continue
         if args.workflow and run["name"] not in args.workflow:
+            continue
+        if args.sha and not any(run["head_sha"].startswith(sha) for sha in args.sha):
             continue
         # One sample per commit and event: a scheduled run days later is a different wait.
         key = (run["head_sha"], run["event"])
@@ -242,8 +244,8 @@ def gitlab_runs(repo, host, args):
         query["source"] = {"pull_request": "merge_request_event"}.get(args.event, args.event)
     if args.branch:
         query["ref"] = args.branch
-    if args.sha:
-        query["sha"] = args.sha
+    if len(args.sha) == 1:
+        query["sha"] = args.sha[0]
     pipelines, err = gitlab(f"projects/{project}/pipelines?{urllib.parse.urlencode(query)}", host, token)
     if pipelines is None:
         die(f"could not list pipelines ({err}); set GITLAB_TOKEN for a private project")
@@ -253,6 +255,8 @@ def gitlab_runs(repo, host, args):
     samples = []
     for pipeline in pipelines:
         if pipeline["status"] != "success" or pipeline["ref"] in args.exclude_branch:
+            continue
+        if args.sha and not any(pipeline["sha"].startswith(sha) for sha in args.sha):
             continue
         data, err = gitlab(f"projects/{project}/pipelines/{pipeline['id']}/jobs?per_page=100", host, token)
         if data is None:
@@ -375,7 +379,7 @@ def print_measure(summary):
     if summary["branch"]:
         scope.append(f"branch={summary['branch']}")
     if summary["sha"]:
-        scope.append(f"sha={summary['sha'][:9]}")
+        scope.append("sha=" + ",".join(sha[:9] for sha in summary["sha"]))
     print(f"\n{n} passing commits sampled ({', '.join(scope)}). Conclusions in the last 100 runs: "
           + ", ".join(f"{k} {v}" for k, v in sorted(summary["conclusions"].items(), key=lambda kv: -kv[1])))
     if n == 0:
@@ -425,6 +429,11 @@ def print_compare(before, after):
           f"After: {after['commits']} commits ({after.get('branch') or 'all branches'}).")
     if min(before["commits"], after["commits"]) < 3:
         print("Fewer than 3 samples on one side: a single cold cache or slow runner can swing these numbers.")
+    queue_before = max((row["queue_p50"] for row in before["jobs"]), default=0)
+    queue_after = max((row["queue_p50"] for row in after["jobs"]), default=0)
+    if max(queue_before, queue_after) > 30:
+        print(f"Jobs waited for a runner (longest median queue: before {fmt(queue_before)}, after {fmt(queue_after)}). "
+              "The wait rows include that queue. Judge each change by its job and step times, which do not.")
     print("\n| | Before | After | Change |")
     print("| --- | --- | --- | --- |")
     for label, key in (("Wait, push to last check (p50)", "wall_p50"), ("Wait (p90)", "wall_p90")):
@@ -480,7 +489,8 @@ def main():
     measure.add_argument("--exclude-branch", action="append", default=[])
     measure.add_argument("--workflow", action="append", default=[],
                          help="GitHub only: count only this workflow (by name); repeat for several")
-    measure.add_argument("--sha")
+    measure.add_argument("--sha", action="append", default=[],
+                         help="count only this commit; repeat to build a baseline from chosen commits (full SHAs)")
     measure.add_argument("--limit", type=int, default=15, help="passing commits to sample")
     measure.add_argument("--out", help="write the summary as JSON for `compare`")
     compare = sub.add_parser("compare")
