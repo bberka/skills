@@ -7,6 +7,7 @@ My agent skills for Claude Code, Codex, Cursor, and other agents that read `SKIL
 | [`challenge-feature`](skills/challenge-feature/SKILL.md) | Argues against a feature idea before any code is written. Checks whether existing features already cover the need, what the change would cost to build and maintain, and how much harder the app gets to learn. Ends with a build / build smaller / don't build verdict. | Asking to challenge an idea, or `/challenge-feature` |
 | [`challenge-feature-panel`](skills/challenge-feature-panel/SKILL.md) | The same question, asked of a panel of subagents: engineer, UX designer, everyday user, product owner, and advocate. Each reviews the idea separately, and the main agent weighs their reports into one verdict. | Asking to challenge an idea, or `/challenge-feature` |
 | [`usability-audit`](skills/usability-audit/SKILL.md) | Opens the running app on every supported device, walks the main tasks, and judges the screenshots as a hurried first-time user would. Also checks what screen reader and keyboard users get. Writes a ranked report of what would confuse or stop people, with a fix for each. Covers app screens, landing pages, and pricing pages. Changes no code. | Asking for a usability, UX, or accessibility audit, or `/usability-audit` |
+| [`ci-optimize`](skills/ci-optimize/SKILL.md) | Measures what a pull request waits on from real run history, reads the merge rules, applies the speedups that leave every check meaning the same thing, and asks before anything that changes what is checked or how the app is built. Proves the gain with a before and after table from real runs. Sets CI up when a project has none. GitHub Actions and GitLab CI. | Asking to speed up, optimize, or set up CI, or `/ci-optimize` |
 
 The unslop skills live in their own repo: [bberka/unslop-skills](https://github.com/bberka/unslop-skills).
 
@@ -135,6 +136,37 @@ On landing pages it checks that a stranger understands the product in five secon
 It needs a way to drive a browser or device: a browser tool in your agent, or Playwright, `adb`, and Xcode from the shell. For the web it ships two Playwright scripts, [shots.mjs](skills/usability-audit/scripts/shots.mjs) and [tabwalk.mjs](skills/usability-audit/scripts/tabwalk.mjs). A platform it can't launch is listed as not audited. The accessibility pass is a usability check, not a WCAG conformance audit.
 
 The rules draw on Nielsen's [ten usability heuristics](https://www.nngroup.com/articles/ten-usability-heuristics/), Steve Krug's *Don't Make Me Think*, [WCAG 2.2](https://www.w3.org/TR/WCAG22/), the [WAI-ARIA Authoring Practices](https://www.w3.org/WAI/ARIA/apg/), Apple's and Google's platform guidelines, the [Laws of UX](https://lawsofux.com/), and Baymard Institute's research on forms and checkout.
+
+### ci-optimize
+
+Run it when CI is slow, costs too much, or doesn't exist yet.
+
+```
+/ci-optimize
+/ci-optimize the test workflow, report only
+why do our pull request checks take ten minutes?
+set up CI for this project
+```
+
+It works from measurements, since most changes that look like speedups move nothing a developer waits on:
+
+1. Finds the provider, the workflows that run on a pull request, and the commands they run.
+2. Measures the baseline with [ci_timing.py](skills/ci-optimize/scripts/ci_timing.py): the wait from push to the last blocking check, runner minutes, each job's median time, how often each job finished last, and the step times of the slowest jobs. The same script reads the merge rules (GitHub rulesets and branch protection, GitLab merge settings) to learn which checks block a merge.
+3. Reads the comments and git history of the CI config, so a deliberately slow step isn't "fixed".
+4. Lists candidate changes from [levers.md](skills/ci-optimize/levers.md), each sized from the measured step times, starting with the slowest chain that blocks the merge.
+5. Applies the safe ones. Asks first, in one question, about anything that changes what is checked or when, changes the app or its build, is a large refactor, touches merge rules, or costs money. Each of those comes with a guardrail, such as the full suite still running after merge.
+6. Makes the changes on a branch, one per commit, and confirms every required check still reports.
+7. Pushes when you agree, runs CI a few times, and compares before and after with the same script. A change that shows no gain is reverted.
+8. Reports the before and after table, what was kept, what was dropped, and the decisions left for you.
+
+| Kind of change | Examples | What it does |
+| --- | --- | --- |
+| Safe | parallel jobs, dependency and tool caches, cancelling superseded runs, shallow checkout, sharding, shards filled by recorded test time ([split_by_time.py](skills/ci-optimize/scripts/split_by_time.py)) | Applies, then keeps only what measured faster |
+| Needs a yes | running only the tests a diff can reach, swapping `tsc` or ESLint for a faster tool, trimming the pull request matrix, moving slow suites to after merge, larger runners, any ruleset change | Asks once, with the measured saving and the cost of each |
+
+It needs `python3` and a signed-in `gh` for GitHub, or a `GITLAB_TOKEN` (or `glab`) for private GitLab projects. Without run history it can only review the config, and says so. On other CI providers the lever list still applies, and the timing script does not.
+
+Its lever list draws on the GitHub Actions and GitLab CI documentation, [GitLab CI Optimization: 15+ Tips for Faster Pipelines](https://dev.to/zenika/gitlab-ci-optimization-15-tips-for-faster-pipelines-55al), and [How to Speed Up a Slow CI Pipeline](https://www.devopsness.com/blog/speed-up-ci-pipeline).
 
 ## Adding a skill
 
