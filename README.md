@@ -8,6 +8,7 @@ My agent skills for Claude Code, Codex, Cursor, and other agents that read `SKIL
 | [`challenge-feature-panel`](skills/challenge-feature-panel/SKILL.md) | The same question, asked of a panel of subagents: engineer, UX designer, everyday user, product owner, and advocate. Each reviews the idea separately, and the main agent weighs their reports into one verdict. | Asking to challenge an idea, or `/challenge-feature` |
 | [`usability-audit`](skills/usability-audit/SKILL.md) | Opens the running app on every supported device, walks the main tasks, and judges the screenshots as a hurried first-time user would. Also checks what screen reader and keyboard users get. Writes a ranked report of what would confuse or stop people, with a fix for each. Covers app screens, landing pages, and pricing pages. Changes no code. | Asking for a usability, UX, or accessibility audit, or `/usability-audit` |
 | [`ci-optimize`](skills/ci-optimize/SKILL.md) | Measures what a pull request waits on from real run history, reads the merge rules, applies the speedups that leave every check meaning the same thing, and asks before anything that changes what is checked or how the app is built. Proves the gain with a before and after table from real runs. Sets CI up when a project has none. GitHub Actions and GitLab CI. | Asking to speed up, optimize, or set up CI, or `/ci-optimize` |
+| [`agent-workflow-audit`](skills/agent-workflow-audit/SKILL.md) | Reads a repo's past agent sessions, its agent rules and docs, and whatever tracker history is reachable, and finds where agents lose time, tokens, and your attention: asks you keep repeating, mistakes they keep making, loud commands, weak validation, skipped errors. Updates the rules and docs, proposes hooks, scripts, and skills, and lists what only a human can change. Any agent CLI, any git host. | Asking to audit or optimize your agent workflow, sessions, or token use, or `/agent-workflow-audit` |
 
 The unslop skills live in their own repo: [bberka/unslop-skills](https://github.com/bberka/unslop-skills).
 
@@ -167,6 +168,37 @@ It works from measurements, since most changes that look like speedups move noth
 It needs `python3` and a signed-in `gh` for GitHub, or a `GITLAB_TOKEN` (or `glab`) for private GitLab projects. Without run history it can only review the config, and says so. On other CI providers the lever list still applies, and the timing script does not.
 
 Its lever list draws on the GitHub Actions and GitLab CI documentation, [GitLab CI Optimization: 15+ Tips for Faster Pipelines](https://dev.to/zenika/gitlab-ci-optimization-15-tips-for-faster-pipelines-55al), and [How to Speed Up a Slow CI Pipeline](https://www.devopsness.com/blog/speed-up-ci-pipeline).
+
+### agent-workflow-audit
+
+Run it when agents in a repo feel slow or expensive, or when you notice you keep typing the same instructions.
+
+```
+/agent-workflow-audit
+/agent-workflow-audit last 14 days, report only
+/agent-workflow-audit tokens only
+audit how my agents work in this repo and fix the rules
+```
+
+It works from what already happened, and every finding comes with the sessions it was seen in and a size:
+
+1. Maps what it can reach: agent sessions on this machine, team sessions, the tracker (pull requests, reviews, issues, CI), docs and wiki, the org, and git history. Whatever it could not open is listed in the report with the reason.
+2. Digests the sessions with [session_digest.py](skills/agent-workflow-audit/scripts/session_digest.py), which reads the Claude Code, Codex, OpenCode, Pi, and T3 Code stores directly, worktree sessions included. It writes the numbers, every ask you typed, and one short digest per session, so the agent never reads a raw transcript. Any other agent CLI comes in through a small converter and `scan --import`.
+3. Reads the agent rules and docs, measures what every session pays to load them, and checks the commands and paths they name.
+4. Looks through eight lenses ([lenses.md](skills/agent-workflow-audit/lenses.md)): repeated asks, corrections and repeated mistakes, token sinks, time sinks, validation, skipped errors, the rules themselves, and the flow around the agent.
+5. Confirms each finding against the transcript, counts it, sizes it, and names the root cause. Fewer than three sessions is an anecdote and stays out.
+6. Picks the strongest fix that works: remove the cause, then enforce with a hook or check, then automate with a script or skill, then a rule line, then a doc.
+7. Applies what is safe on a local branch, asks once about the rest, and reports.
+
+| Set | Examples | What it does |
+| --- | --- | --- |
+| Apply now | edits to `AGENTS.md`, `CLAUDE.md`, and docs, pruning stale or duplicate rules, project scripts and commands that run only when called | Applies on a branch, one commit per finding |
+| Ask first | hooks, CI checks, lint rules, permission lists, default models, user-level files, anything pushed or posted | Asks once, with the evidence and the saving for each |
+| Needs a human | org and billing settings, access it was not given, team habits, your own prompting habits | Lists who has to do what, and why an agent cannot |
+
+It needs `python3`. The tracker lens uses whichever tool reaches your host (`gh`, `glab`, `tea`, `az`, an MCP tool) and falls back to git history when none is signed in. Nothing is pushed, opened, or posted unless you ask.
+
+The report ends with baseline numbers. After the changes have been in use for a while, scan the two windows and run `session_digest.py compare` to see what moved.
 
 ## Adding a skill
 
