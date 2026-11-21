@@ -15,13 +15,13 @@ Give each inventory row exactly one destination. Test them in this order and tak
 
 A row may be split (`12a`, `12b`) when one paragraph holds rules with different destinations. A rule that sits in the root and already in a doc maps to that doc.
 
-**Long material every task needs**, such as a numbered task workflow of many steps, is split. The root keeps one hard rule per step that every task must not miss, plus a line naming the doc to load before the first edit ("Load workflow.md and validation.md before the first edit"); the steps' detail moves to that doc. When the root is still over the cap, the hard rules are too detailed: move each rule's how-to into its doc and keep the what in the root.
+**Long material every task needs**, such as a numbered task workflow of many steps, is split. The root keeps one hard rule per step that every task must not miss, plus a line naming the doc to load before the first edit ("Load workflow.md and validation.md before the first edit"); the steps' detail moves to that doc. When the root is still over the cap, the hard rules are too detailed: move each rule's how-to into its doc and keep the what in the root. When one rule per step still does not fit, keep the steps whose skipping is costly and goes unnoticed, and fold the rest into the single line that loads the workflow doc, naming it the definition of done.
 
-Files a tool writes (a framework's generated `AGENTS.md`, for example) keep their rows as `folder <that path>` and stay untouched.
+Files a tool writes (a framework's generated `AGENTS.md`, for example) keep their rows as `folder <that path>` and stay untouched. The `CLAUDE.md` import beside one is the repository's own file, so it gets one like any other `AGENTS.md`.
 
 ## Root `AGENTS.md`
 
-The map. About 60 lines and 5 KB at most, in this order:
+The map. About 60 lines and 5 KB, in this order. Both are targets, not hard caps: the budget is the hard limit, and it only stops growth. Go over them only for hard rules that pass the `root` test, and name the overage in the pull request.
 
 1. **Title and what the project is**, 1 or 2 sentences. Say where humans start and that agents load the docs folder on demand.
 2. **Layout**: one line per app, package, or top-level folder that work happens in, saying what it is and anything about it that crosses folders.
@@ -78,6 +78,8 @@ Load [server.md](../../docs/agents/server.md) before editing here.
 ```
 
 A folder with no such rule gets no `AGENTS.md`; its topic doc is enough.
+
+When the file is over 15 lines and every rule breaks something when missed, keep them all; the cap is a target. First make each rule one line, then move the rules that guard one subfolder into an `AGENTS.md` there, next to the code they protect, and list any rule a test or check could enforce as a proposal for the user.
 
 ## `CLAUDE.md`
 

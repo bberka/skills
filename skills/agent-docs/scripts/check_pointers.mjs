@@ -7,9 +7,12 @@
 // node_modules/) and every Markdown file in the docs folder (default: docs/agents).
 //
 // Errors (exit 1): a Markdown link or an @import whose file or #heading does not exist.
-// Warnings: a `run <script>` with no such script in any package.json, a backticked path that matches no file or folder
-// the repo tracks (shorthand like `src/shared` passes when some path ends with it), a doc the root AGENTS.md does not point to, a size over its cap, an AGENTS.md without a
-// CLAUDE.md that imports it, a CLAUDE.md that holds more than imports.
+// Warnings: a `run <script>` with no such script in any package.json, a backticked path that matches no file or
+// folder git knows (shorthand like `src/shared` passes when some path ends with it), a doc the root AGENTS.md does not
+// point to, a size over its cap, an AGENTS.md without a CLAUDE.md that imports it, a CLAUDE.md that holds more than
+// imports.
+// Notes: backticked paths .gitignore matches (build output, local state). They are listed apart and not checked, so the
+// result is the same before and after a build.
 // No dependencies. Needs Node 18 or later and git.
 import {execFileSync} from 'node:child_process';
 import {existsSync, readFileSync, statSync} from 'node:fs';
@@ -22,7 +25,9 @@ const option = (name, fallback) => {
 	return index === -1 ? fallback : args[index + 1];
 };
 if (args.includes('--help') || args.includes('-h')) {
-	console.log(readFileSync(new URL(import.meta.url), 'utf8').split('\n').slice(1, 14).join('\n').replace(/^\/\/ ?/gm, ''));
+	const lines = readFileSync(new URL(import.meta.url), 'utf8').split('\n').slice(1);
+	const header = lines.slice(0, lines.findIndex((line) => !line.startsWith('//')));
+	console.log(header.join('\n').replace(/^\/\/ ?/gm, ''));
 	process.exit(0);
 }
 const repo = execFileSync('git', ['-C', option('--repo', '.'), 'rev-parse', '--show-toplevel'], {encoding: 'utf8'}).trim();
@@ -34,18 +39,21 @@ const caps = {
 };
 
 const SKIP = [/^\.claude\//, /^\.agents\//, /(^|\/)node_modules\//];
-const all = execFileSync('git', ['-C', repo, 'ls-files', '-z', '--cached', '--others', '--exclude-standard'], {
+const listed = execFileSync('git', ['-C', repo, 'ls-files', '-z', '--cached', '--others', '--exclude-standard'], {
 	encoding: 'utf8',
 	maxBuffer: 1 << 28,
 })
 	.split('\0')
-	.filter((file) => file && existsSync(join(repo, file)) && !SKIP.some((rule) => rule.test(file)));
+	.filter((file) => file && existsSync(join(repo, file)));
+const all = listed.filter((file) => !SKIP.some((rule) => rule.test(file)));
 const rulesFiles = all.filter((file) => /(^|\/)(AGENTS|CLAUDE)\.md$/.test(file));
 const docs = all.filter((file) => file.startsWith(`${docsFolder}/`) && file.endsWith('.md'));
 const files = [...new Set([...rulesFiles, ...docs])].sort();
 
 const errors = [];
 const warnings = [];
+const notes = [];
+const unmatched = [];
 const read = (file) => readFileSync(join(repo, file), 'utf8');
 
 // GitHub's heading anchors: lowercase, punctuation dropped, spaces to hyphens, repeats numbered.
@@ -121,7 +129,7 @@ for (const manifest of all.filter((file) => /(^|\/)package\.json$/.test(file))) 
 
 // Every tracked path and its folders, so a shorthand like `src/shared` or `platform.ts` resolves when some file ends with it.
 const known = new Set();
-for (const file of all) {
+for (const file of listed) {
 	const parts = file.split('/');
 	for (let i = 1; i <= parts.length; i++) known.add(parts.slice(0, i).join('/'));
 }
@@ -158,11 +166,28 @@ function checkSpan(file, line, span) {
 	if (!looksLikePath || /^\d/.test(token)) return;
 	if (/^(@|origin\/|https?:)/.test(token) || /^\.[^/]*$/.test(token)) return;
 	const bare = token.replace(/\/$/, '');
-	if (existsSync(join(repo, resolveTarget(file, bare))) || existsSync(join(repo, bare))) return;
-	if (known.has(bare) || [...known].some((path) => path.endsWith(`/${bare}`))) return;
-	warnings.push(`${file}:${line}: \`${token}\` matches no tracked file or folder (fine for a build output or an ignored path)`);
+	const beside = resolveTarget(file, bare);
+	if (known.has(beside) || known.has(bare) || [...known].some((path) => path.endsWith(`/${bare}`))) return;
+	unmatched.push({file, line, token, paths: [beside, bare]});
 }
 
+// Paths .gitignore matches exist only after a build or a local run, so they are notes, not warnings.
+function sortIgnored() {
+	if (unmatched.length === 0) return;
+	const queries = [...new Set(unmatched.flatMap(({paths}) => paths.flatMap((path) => [path, `${path}/`])))];
+	let ignored = new Set();
+	try {
+		ignored = new Set(execFileSync('git', ['-C', repo, 'check-ignore', '--no-index', '--stdin'], {encoding: 'utf8', input: queries.join('\n')}).split('\n'));
+	} catch (error) {
+		ignored = new Set(String(error.stdout ?? '').split('\n'));
+	}
+	for (const {file, line, token, paths} of unmatched) {
+		if (paths.some((path) => ignored.has(path) || ignored.has(`${path}/`))) notes.push(`${file}:${line}: \`${token}\` is gitignored, not checked`);
+		else warnings.push(`${file}:${line}: \`${token}\` matches no file or folder git knows`);
+	}
+}
+
+sortIgnored();
 for (const doc of docs) {
 	if (!rootLinks.has(doc)) warnings.push(`${doc}: the root AGENTS.md does not point to it`);
 }
@@ -198,5 +223,6 @@ if (existsSync(join(repo, 'AGENTS.md'))) {
 }
 for (const message of errors) console.log(`error: ${message}`);
 for (const message of warnings) console.log(`warning: ${message}`);
-console.log(`${errors.length} errors, ${warnings.length} warnings.`);
+for (const message of notes) console.log(`note: ${message}`);
+console.log(`${errors.length} errors, ${warnings.length} warnings, ${notes.length} gitignored paths not checked.`);
 process.exitCode = errors.length > 0 ? 1 : 0;

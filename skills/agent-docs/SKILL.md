@@ -48,7 +48,7 @@ The scripts need Node 18 or later and git, and run from inside the target reposi
 
 ### 1. Read the repository
 
-- List the agent instruction files: `git ls-files --cached --others --exclude-standard | grep -E '(^|/)(AGENTS|CLAUDE)\.md$'`, minus installed skill folders (`.claude/`, `.agents/`) and vendored text. Note files a tool writes.
+- List the agent instruction files: `git ls-files --cached --others --exclude-standard | grep -E '(^|/)(AGENTS|CLAUDE)\.md$'`, minus installed skill folders (`.claude/`, `.agents/`) and vendored text. Note files a tool writes (a framework's generated `AGENTS.md`, for example): their inventory rows go to `folder <that path>` unchanged, and they go in the budget's skip list, since the tool rewrites them.
 - Find the docs folder and every doc the instruction files point to.
 - Find an existing budget, as budget.md describes.
 - Note the repository's workflow for landing a change: default branch, branch naming, worktree use, setup command, commit style and authorship, required checks, pull request body format. Sources: the instruction files, `CONTRIBUTING.md`, `.github/pull_request_template.md`, hooks.
@@ -95,10 +95,11 @@ node <this skill>/scripts/check_pointers.mjs --docs <docs folder>
 node <this skill>/scripts/inventory.mjs --check <scratch>/inventory.md --repo .
 ```
 
-- `check_pointers.mjs` must report 0 errors. Resolve each warning or say in the pull request why it stays (a build output path, a generated file).
+- `check_pointers.mjs` must report 0 errors. Resolve each warning or say in the pull request why it stays. Its notes list gitignored paths (build output, local state), which it does not check.
 - The inventory check now also confirms every destination file exists. Read each destination and confirm its rule is there.
 - Run every command the new files name that the checker could not resolve, or confirm it in its `package.json`, `Makefile`, or `--help`.
-- Run the budget check and its tests as CI will, including the growth check against the base.
+- Run the budget check and its tests, and the growth check against the base locally with `--base=origin/<base>` (or the script's flag form) after a plain `git fetch origin <base>`. Leave the workflow's `git fetch --depth=1` in CI: run locally, it makes the shared repository shallow for every worktree.
+- Sweep the whole repository for references to root sections you moved or renamed: `git grep -n -F '<old heading>'` for each, and `git grep -n 'AGENTS.md#'`. Docs, guides, scripts, hook messages, and code comments all count; `check_pointers.mjs` reads only the instruction files and the docs folder. Point each hit at the new place.
 - Compute the after numbers the same way as in step 1.
 
 Done when both commands pass, the budget check passes, and you have before and after figures for each file group and the always-loaded bytes.

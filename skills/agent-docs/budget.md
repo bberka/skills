@@ -28,7 +28,7 @@ Then:
 
 1. Add `package.json` scripts in the repository's naming style when it routes tasks through them, such as `"agent-context:check": "node scripts/agent-context.mjs"` and `"agent-context:write": "node scripts/agent-context.mjs --write"`.
 2. Run `node scripts/agent-context.mjs --write`, then `node scripts/agent-context.mjs` (passes).
-3. Create the label if it is missing: `gh label list --search agent-context-increase`, then `gh label create agent-context-increase --description "Accepts growth of the agent instructions"`. Label creation is outward-facing: do it when the user has allowed pushing to the remote, otherwise list it for the user.
+3. Create the label if it is missing. `gh label list --search` matches loosely, so check the exact name: `gh api 'repos/{owner}/{repo}/labels/agent-context-increase' --silent` fails when it does not exist. Then `gh label create agent-context-increase --description "Accepts growth of the agent instructions"`. Label creation is outward-facing: do it when the user has allowed pushing to the remote, otherwise list it for the user.
 
 The script keys the budget by group, so a new doc raises its group's total and counts as growth. A group the base budget does not have yet is skipped, since there is nothing to grow from.
 
@@ -51,6 +51,7 @@ Then rewrite the budget with the repository's own write command and check that t
 
 Moving rules out of the root shrinks the root and grows the groups that receive them. Expect the growth check to fail on the receiving keys. That is the label's job:
 
-- Report each key's change and the net change, base to head, in the pull request body: `node scripts/agent-context.mjs --base origin/<default>` (or the repository's form) lists the growth; compare the two budget files for the rest.
+- Report each key's change and the net change, base to head, in the pull request body. The growth check lists what grew. For the rest, measure the base from git rather than its budget file, which lacks any group or file the budget did not cover yet: `git ls-tree -r -l origin/<base> -- AGENTS.md CLAUDE.md <docs folder>` prints each file's size at the base (fourth column), and `git ls-tree -r -l origin/<base> | grep -E '/(AGENTS|CLAUDE)\.md$'` the per-folder files. Sum them per key and compare with the new budget.
+- **Commit order.** The budget must match the files in every commit, and a hook that runs the check reads the working tree, not the commit. So finish one change before starting the next: edit, run the write command, stage the files and the budget together, commit, and only then edit for the next commit. With edits for several commits already in the tree, the hook passes while a commit in the middle mismatches; commit them as one or rebuild them in order.
 - Ask the maintainer for the `agent-context-increase` label in the body. Add it yourself only when the user tells you to.
 - Keep the net change negative. Deleted rows should outweigh what the docs gained; when they do not, look again at `delete` candidates and duplicated text before asking for the label.

@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 // Builds and checks the rule inventory: one row per rule in the agent instruction files, each given one destination.
 //
-//   node inventory.mjs [--repo <dir>] [--out <file>] [extra.md ...]   write the skeleton (default: stdout)
+//   node inventory.mjs [--repo <dir>] [--docs <folder>] [--out <file>] [extra.md ...]   write the skeleton (default: stdout)
 //   node inventory.mjs --check <file> [--repo <dir>]                  fail on a row without a valid destination
 //
 // The skeleton covers every AGENTS.md and CLAUDE.md git knows about (skipping .claude/, .agents/, node_modules/), plus
 // any extra files named, such as a doc you will split. A unit is a list item, a table row, a paragraph, or a fenced
-// block, with the heading it sits under. Split a unit that holds several rules into rows 12a, 12b, and so on.
-// Every other Markdown file those files link to gets one row for the whole doc.
+// block, with the heading it sits under; in a CLAUDE.md, a heading or an import other than @AGENTS.md is a unit too.
+// Split a unit that holds several rules into rows 12a, 12b, and so on. Every other Markdown file those files link to,
+// and every Markdown file in the docs folder (default docs/agents) that nothing links to, gets one row for the whole doc.
 //
 // Destinations: `root`, `doc <path>`, `folder <path>` (the per-folder AGENTS.md), `delete`. A `delete` row needs a
 // reason: what enforces it (file, script, hook, CI job), why it is stale, or where it already lives. With --repo,
@@ -24,23 +25,22 @@ const option = (name) => {
 	return index === -1 ? undefined : args[index + 1];
 };
 if (args.includes('--help') || args.includes('-h')) {
-	console.log(readFileSync(new URL(import.meta.url), 'utf8').split('\n').slice(1, 15).join('\n').replace(/^\/\/ ?/gm, ''));
+	const lines = readFileSync(new URL(import.meta.url), 'utf8').split('\n').slice(1);
+	const header = lines.slice(0, lines.findIndex((line) => !line.startsWith('//')));
+	console.log(header.join('\n').replace(/^\/\/ ?/gm, ''));
 	process.exit(0);
 }
 const repoArg = option('--repo');
 const repo = execFileSync('git', ['-C', repoArg ?? '.', 'rev-parse', '--show-toplevel'], {encoding: 'utf8'}).trim();
 
+const docsFolder = (option('--docs') ?? 'docs/agents').replace(/\/$/, '');
 const checkFile = option('--check');
 process.exitCode = checkFile ? check(checkFile) : write();
 
 function sources() {
-	const valued = new Set(['--repo', '--out']);
+	const valued = new Set(['--repo', '--out', '--docs']);
 	const extra = args.filter((arg, index) => !arg.startsWith('--') && !valued.has(args[index - 1]));
-	const listed = execFileSync('git', ['-C', repo, 'ls-files', '-z', '--cached', '--others', '--exclude-standard'], {
-		encoding: 'utf8',
-		maxBuffer: 1 << 28,
-	})
-		.split('\0')
+	const listed = gitFiles()
 		.filter((file) => /(^|\/)(AGENTS|CLAUDE)\.md$/.test(file))
 		.filter((file) => !/^\.claude\/|^\.agents\/|(^|\/)node_modules\//.test(file))
 		.filter((file) => existsSync(join(repo, file)));
@@ -48,7 +48,17 @@ function sources() {
 	return [...new Set([...listed.sort(rootFirst), ...extra])];
 }
 
+function gitFiles() {
+	return execFileSync('git', ['-C', repo, 'ls-files', '-z', '--cached', '--others', '--exclude-standard'], {
+		encoding: 'utf8',
+		maxBuffer: 1 << 28,
+	})
+		.split('\0')
+		.filter(Boolean);
+}
+
 function units(file) {
+	const isClaude = file.endsWith('CLAUDE.md');
 	const result = [];
 	let heading = '';
 	let current;
@@ -79,9 +89,15 @@ function units(file) {
 		if (headingMatch) {
 			flush();
 			heading = headingMatch[1].trim();
+			if (isClaude) result.push({file, line: number, heading, text: [line]});
 			return;
 		}
-		if (line.trim() === '' || /^\s*@\S+\s*$/.test(line) || /^\s*\|?\s*:?-{3,}/.test(line)) {
+		if (/^\s*@\S+\s*$/.test(line)) {
+			flush();
+			if (isClaude && line.trim() !== '@AGENTS.md') result.push({file, line: number, heading, text: [line]});
+			return;
+		}
+		if (line.trim() === '' || /^\s*\|?\s*:?-{3,}/.test(line)) {
 			flush();
 			return;
 		}
@@ -121,10 +137,15 @@ function linkedDocs(files) {
 
 function write() {
 	const files = sources();
-	const docs = linkedDocs(files);
+	const linked = linkedDocs(files);
+	const orphans = gitFiles()
+		.filter((file) => file.startsWith(`${docsFolder}/`) && file.endsWith('.md') && existsSync(join(repo, file)))
+		.filter((file) => !files.includes(file) && !linked.some(([doc]) => doc === file))
+		.map((file) => [file, undefined]);
+	const docs = [...linked, ...orphans];
 	const all = [
 		...files.flatMap(units),
-		...docs.map(([doc, from]) => ({file: doc, line: 1, heading: '', text: [`whole doc, linked from ${from}`]})),
+		...docs.map(([doc, from]) => ({file: doc, line: 1, heading: '', text: [from ? `whole doc, linked from ${from}` : `whole doc in ${docsFolder}/, nothing links to it`]})),
 	];
 	const out = [
 		'# Agent rules inventory',
@@ -137,7 +158,7 @@ function write() {
 			return `- ${file}: ${text.trimEnd().split('\n').length} lines, ${statSync(join(repo, file)).size} bytes`;
 		}),
 		...(docs.length > 0
-			? ['', 'Linked docs (one row each; name one as an argument to itemize it):', ...docs.map(([doc]) => `- ${doc}: ${statSync(join(repo, doc)).size} bytes`)]
+			? ['', 'Docs linked from those files or in the docs folder (one row each; name one as an argument to itemize it):', ...docs.map(([doc]) => `- ${doc}: ${statSync(join(repo, doc)).size} bytes`)]
 			: []),
 		'',
 		'Destination: `root`, `doc <path>`, `folder <path>`, or `delete`. A `delete` needs a reason.',
