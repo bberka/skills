@@ -1,0 +1,28 @@
+name: Agent context
+
+# Fails a pull request whose agent instructions (the AGENTS.md and CLAUDE.md files and docs/agents/) no longer match
+# scripts/agent-context-budget.json, or whose budget is above the base branch's, unless the pull request carries the
+# agent-context-increase label. Its own workflow, so adding or removing the label reruns only this check. No
+# concurrency group: label events arrive in bursts, and a cancelled run reports as a failed check.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  budget:
+    name: Agent instructions size
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Compare with the base branch
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          ALLOW_INCREASE: ${{ contains(github.event.pull_request.labels.*.name, 'agent-context-increase') }}
+        run: |
+          git fetch --quiet --depth=1 origin "$BASE_REF"
+          node scripts/agent-context.mjs --base FETCH_HEAD

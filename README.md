@@ -9,6 +9,7 @@ My agent skills for Claude Code, Codex, Cursor, and other agents that read `SKIL
 | [`usability-audit`](skills/usability-audit/SKILL.md) | Opens the running app on every supported device, walks the main tasks, and judges the screenshots as a hurried first-time user would. Also checks what screen reader and keyboard users get. Writes a ranked report of what would confuse or stop people, with a fix for each. Covers app screens, landing pages, and pricing pages. Changes no code. | Asking for a usability, UX, or accessibility audit, or `/usability-audit` |
 | [`ci-optimize`](skills/ci-optimize/SKILL.md) | Measures what a pull request waits on from real run history, reads the merge rules, applies the speedups that leave every check meaning the same thing, and asks before anything that changes what is checked or how the app is built. Proves the gain with a before and after table from real runs. Sets CI up when a project has none. GitHub Actions and GitLab CI. | Asking to speed up, optimize, or set up CI, or `/ci-optimize` |
 | [`agent-workflow-audit`](skills/agent-workflow-audit/SKILL.md) | Reads a repo's past agent sessions, its agent rules and docs, and whatever tracker history is reachable, and finds where agents lose time, tokens, and your attention: asks you keep repeating, mistakes they keep making, loud commands, weak validation, skipped errors. Updates the rules and docs, proposes hooks, scripts, and skills, and lists what only a human can change. Any agent CLI, any git host. | Asking to audit or optimize your agent workflow, sessions, or token use, or `/agent-workflow-audit` |
+| [`agent-docs`](skills/agent-docs/SKILL.md) | Turns a long `AGENTS.md` into a short map (what the project is, layout, how tasks run, hard rules, and a load-on-demand list) plus topic docs read only when a task needs them. Gives every existing rule one destination, or deletes it with the reason, so nothing is dropped silently. Adds a CI size budget, or extends the one you have, so the instructions cannot grow back unnoticed. | Asking to shrink, split, or restructure `AGENTS.md` or `CLAUDE.md`, or `/agent-docs` |
 
 The unslop skills live in their own repo: [bberka/unslop-skills](https://github.com/bberka/unslop-skills).
 
@@ -199,6 +200,25 @@ It works from what already happened, and every finding comes with the sessions i
 It needs `python3`. The tracker lens uses whichever tool reaches your host (`gh`, `glab`, `tea`, `az`, an MCP tool) and falls back to git history when none is signed in. Nothing is pushed, opened, or posted unless you ask.
 
 The report ends with baseline numbers. After the changes have been in use for a while, scan the two windows and run `session_digest.py compare` to see what moved.
+
+### agent-docs
+
+Run it when the root `AGENTS.md` has grown into a manual that every session pays for, or after `agent-workflow-audit` says the rules cost too much.
+
+```
+/agent-docs
+/agent-docs budget only
+our AGENTS.md is 250 lines, split it into docs loaded on demand
+```
+
+1. Reads the instruction files, the docs they point to, any existing size budget, and how the repo lands changes (branches, worktrees, commits, pull requests).
+2. Writes an inventory to a scratch file with [inventory.mjs](skills/agent-docs/scripts/inventory.mjs): one row per rule, each given one destination. A root hard rule, a topic doc, a per-folder `AGENTS.md`, or deleted, with what enforces it or why it is stale. The script fails while any row has none.
+3. Rewrites the files to the shape in [shape.md](skills/agent-docs/shape.md): the root map at about 60 lines, per-folder files under 15 lines for the rules that break something when missed, `CLAUDE.md` files as `@AGENTS.md` imports, and a section that tells future agents how to keep the shape.
+4. Adds the budget from [templates/](skills/agent-docs/templates/): a dependency-free Node script, the committed JSON of sizes, and a GitHub Actions check that fails a pull request whose instructions grew, unless it has the `agent-context-increase` label. An existing budget is extended to cover the docs folder instead of getting a second one.
+5. Checks with [check_pointers.mjs](skills/agent-docs/scripts/check_pointers.mjs) that every link, heading anchor, import, and named script exists, and that every doc has a pointer.
+6. Lands it the way the repo does, with the before and after always-loaded bytes and the inventory in the pull request.
+
+It writes the text with the `writing-for-agents` skill loaded. It needs Node 18 or later and git; the workflow template is for GitHub Actions.
 
 ## Adding a skill
 
